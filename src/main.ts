@@ -1,34 +1,126 @@
-/**
- * Some predefined delay values (in milliseconds).
- */
-export enum Delays {
-  Short = 500,
-  Medium = 2000,
-  Long = 5000,
+import puppeteer from 'puppeteer';
+import 'dotenv/config';
+import fs from 'node:fs';
+
+const {
+  APT_NAME,
+  FIRST_NAME,
+  LAST_NAME,
+  UNIT_NO,
+  CAR_MAKE,
+  CAR_MODEL,
+  CAR_COLOR,
+  CAR_PLATE,
+  GUEST_EMAIL,
+} = process.env;
+
+const delay = 100;
+
+function getEmailDirectory(email: string) {
+  return email.replaceAll('.', '_');
 }
 
-/**
- * Returns a Promise<string> that resolves after a given time.
- *
- * @param {string} name - A name.
- * @param {number=} [delay=Delays.Medium] - A number of milliseconds to delay resolution of the Promise.
- * @returns {Promise<string>}
- */
-function delayedHello(
-  name: string,
-  delay: number = Delays.Medium,
-): Promise<string> {
-  return new Promise((resolve: (value?: string) => void) =>
-    setTimeout(() => resolve(`Hello, ${name}`), delay),
-  );
-}
+(async () => {
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.newPage();
 
-// Please see the comment in the .eslintrc.json file about the suppressed rule!
-// Below is an example of how to use ESLint errors suppression. You can read more
-// at https://eslint.org/docs/latest/user-guide/configuring/rules#disabling-rules
+  await page.goto('https://app.parkingbadge.com/#/guest');
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export async function greeter(name: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  // The name parameter should be of type string. Any is used only to trigger the rule.
-  return await delayedHello(name, Delays.Long);
-}
+  // Set screen size
+  await page.setViewport({ width: 1080, height: 1440 });
+
+  await page.waitForSelector('label::-p-text(Register New Parking)');
+
+  // Type into search box
+  await page.type('label::-p-text(Apartment Community) ~ input', APT_NAME, {
+    delay,
+  });
+
+  page.keyboard.press('ArrowDown', { delay });
+  page.keyboard.press('Enter', { delay });
+  page.keyboard.press('Tab', { delay });
+
+  // Type into search box
+  await page.type('label::-p-text(Resident first name) ~ input', FIRST_NAME, {
+    delay,
+  });
+
+  // Type into search box
+  await page.type('label::-p-text(Resident last name) ~ input', LAST_NAME, {
+    delay,
+  });
+
+  // Type into search box
+  await page.type('label::-p-text(Resident unit #) ~ input', UNIT_NO, {
+    delay,
+  });
+
+  // Type into search box
+  await page.type('label::-p-text(Vehicle make) ~ input', CAR_MAKE, {
+    delay,
+  });
+
+  // Type into search box
+  await page.type('label::-p-text(Vehicle model) ~ input', CAR_MODEL, {
+    delay,
+  });
+
+  // Type into search box
+  await page.type('label::-p-text(Vehicle color) ~ input', CAR_COLOR, {
+    delay,
+  });
+
+  // Type into search box
+  await page.type('label::-p-text(License Plate) ~ input', CAR_PLATE, {
+    delay,
+  });
+
+  // Type into search box
+  await page.type('label::-p-text(Your Email) ~ input', GUEST_EMAIL, {
+    delay,
+  });
+
+  const directory = `./screenshots/${getEmailDirectory(GUEST_EMAIL)}`;
+
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+
+  page.screenshot({
+    path: `${directory}/form.png`,
+    fullPage: true,
+  });
+
+  await page.click('button::-p-text(Next)');
+
+  const checkboxSelector = '.agreement__container input[type="checkbox"]';
+  await page.waitForSelector(checkboxSelector);
+  const isAgreed = await page.$eval(checkboxSelector, el => {
+    console.log('isChecked', el.TAGNAME, el.checked);
+    return el.checked === true;
+  });
+  if (!isAgreed) {
+    console.log(checkboxSelector);
+    await page.click(checkboxSelector, { delay });
+  }
+
+  page.screenshot({
+    path: `${directory}/agreement.png`,
+    fullPage: true,
+  });
+
+  try {
+    await page.click('button::-p-text(Submit)', { delay });
+  } catch (err) {
+    console.log('Silent fail', err);
+  }
+
+  await page.waitForSelector('button::-p-text(Print)');
+
+  page.screenshot({
+    path: `${directory}/submit.png`,
+    fullPage: true,
+  });
+
+  await browser.close();
+})();
